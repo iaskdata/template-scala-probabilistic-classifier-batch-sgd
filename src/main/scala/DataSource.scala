@@ -26,20 +26,11 @@ class DataSource(val dsp: DataSourceParams)
 
   @transient lazy val logger = Logger[this.type]
 
-  override
-  def readTraining(sc: SparkContext): TrainingData = {
-    logger.info(dsp.appName)
+
+  def getLabeledPoints(sc: SparkContext):RDD[LabeledPoint] = {
     val eventsRDD: RDD[Event] = PEventStore.find(
       appName = dsp.appName,
       entityType = Some("user")
-//      eventNames = Some(List("bad_loan", "loan_amnt","longest_credit_length","revol_util",
-//        "emp_length","home_ownership","annual_inc","purpose","addr_state","dti","delinq_2yrs"
-//        ,"total_acc","verification_status","term")))(sc)
-
-//      eventNames = Some(List("bad_loan", "loan_amnt","longest_credit_length","revol_util",
-//      "emp_length","home_ownership","annual_inc","dti","delinq_2yrs"
-//      ,"total_acc","verification_status","term"))
-
     )(sc)
     logger.info(eventsRDD.first())
 
@@ -73,8 +64,8 @@ class DataSource(val dsp: DataSourceParams)
           event.properties.get[String]("emp_length").toDouble,
           home_ownership,
           event.properties.get[String]("annual_inc").toDouble,
-//          event.properties.get[Double]("purpose"),
-//          event.properties.get[Double]("addr_state"),
+          //          event.properties.get[Double]("purpose"),
+          //          event.properties.get[Double]("addr_state"),
           event.properties.get[String]("dti").toDouble,
           event.properties.get[String]("delinq_2yrs").toDouble,
           event.properties.get[String]("total_acc").toDouble,
@@ -84,6 +75,14 @@ class DataSource(val dsp: DataSourceParams)
       )
 
     }.cache()
+    labeledPoints
+  }
+
+  override
+  def readTraining(sc: SparkContext): TrainingData = {
+
+
+    val labeledPoints: RDD[LabeledPoint] = this.getLabeledPoints(sc)
 
 
     new TrainingData(labeledPoints)
@@ -99,57 +98,7 @@ class DataSource(val dsp: DataSourceParams)
     // illustration purpose, a recommended approach is to factor out this logic
     // into a helper function and have both readTraining and readEval call the
     // helper.
-    val eventsRDD: RDD[Event] = PEventStore.find(
-      appName = dsp.appName,
-      entityType = Some("user")
-      //      eventNames = Some(List("bad_loan", "loan_amnt","longest_credit_length","revol_util",
-      //        "emp_length","home_ownership","annual_inc","purpose","addr_state","dti","delinq_2yrs"
-      //        ,"total_acc","verification_status","term")))(sc)
-
-      //      eventNames = Some(List("bad_loan", "loan_amnt","longest_credit_length","revol_util",
-      //      "emp_length","home_ownership","annual_inc","dti","delinq_2yrs"
-      //      ,"total_acc","verification_status","term"))
-
-    )(sc)
-    logger.info(eventsRDD.first())
-
-    val labeledPoints: RDD[LabeledPoint] = eventsRDD.map{event =>
-      val home_ownership: Double = event.event match {
-        case "OWN" => 5.0
-        case "RENT" => 1.0
-        case "MORTGAGE" => 0.0
-        case _ => 0.0
-      }
-
-      val verification_status: Double = event.event match {
-        case "verified" => 1.0
-        case "not verified" => 0.0
-        case _ => 0.0
-      }
-
-      val term:Double = event.event.replace("months","").toDouble;
-
-
-
-      LabeledPoint(event.properties.get[Double]("bad_loan"),
-        Vectors.dense(Array(
-          event.properties.get[Double]("loan_amnt"),
-          event.properties.get[Double]("longest_credit_length"),
-          event.properties.get[Double]("revol_util"),
-          event.properties.get[Double]("emp_length"),
-          home_ownership,
-          event.properties.get[Double]("annual_inc"),
-          //          event.properties.get[Double]("purpose"),
-          //          event.properties.get[Double]("addr_state"),
-          event.properties.get[Double]("dti"),
-          event.properties.get[Double]("delinq_2yrs"),
-          event.properties.get[Double]("total_acc"),
-          verification_status,
-          term
-        ))
-      )
-
-    }.cache()
+    val labeledPoints: RDD[LabeledPoint] = this.getLabeledPoints(sc)
     // End of reading from data store
 
     // K-fold splitting
